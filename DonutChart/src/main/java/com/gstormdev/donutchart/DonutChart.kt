@@ -124,7 +124,7 @@ class DonutChart @JvmOverloads constructor(
         animator.start()
     }
 
-    fun setTextSize(@DimenRes size: Int) {
+    fun setTextSizeRes(@DimenRes size: Int) {
         this.textSize = resources.getDimension(size)
     }
 
