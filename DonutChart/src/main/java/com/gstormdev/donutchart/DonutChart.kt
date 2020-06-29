@@ -5,13 +5,15 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.View
+import androidx.annotation.ColorRes
+import androidx.annotation.DimenRes
+import androidx.core.content.ContextCompat
+import kotlin.math.max
 import kotlin.math.min
 
-// TODO need to add a text label to the center of the chart (to show the current value)
-// TODO add text size/color options
-// TODO add color options for rings
 // TODO add animation for ring updates
 
 class DonutChart @JvmOverloads constructor(
@@ -20,38 +22,108 @@ class DonutChart @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
+    private val minimumSize = 100
     private var oval = RectF()
     private var percentage: Float
 
+    var text: String? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    var textSize: Float = 0f
+        set(value) {
+            field = value
+            textPaint.textSize = value
+            invalidate()
+        }
+
+    var textColor: Int = 0
+        set(value) {
+            field = value
+            textPaint.color = value
+            invalidate()
+        }
+
+    var ringColor: Int = 0
+        set(value) {
+            field = value
+            backgroundArcPaint.color = value
+            invalidate()
+        }
+
+    var progressColor: Int = 0
+        set(value) {
+            field = value
+            foregroundArcPaint.color = value
+            invalidate()
+        }
+
     private val backgroundArcPaint = Paint().apply {
         isAntiAlias = true
-        color = Color.GRAY
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
 
     private val foregroundArcPaint = Paint().apply {
         isAntiAlias = true
-        color = Color.CYAN
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
 
+    private val textPaint = Paint().apply {
+        isAntiAlias = true
+    }
+
     init {
+        val defaultTextSize = resources.displayMetrics.scaledDensity * 24  // 24sp
+        val defaultTextColor = Color.BLACK
+        val defaultRingColor = Color.GRAY
+        val defaultProgressColor = Color.CYAN
         context.theme.obtainStyledAttributes(attrs, R.styleable.DonutChart, 0, 0)
                 .apply {
                     try {
                         percentage = getFloat(R.styleable.DonutChart_percentage, 0f)
+                        text = getString(R.styleable.DonutChart_text)
+                        textSize = getDimension(R.styleable.DonutChart_textSize, defaultTextSize)
+                        textColor = getColor(R.styleable.DonutChart_textColor, defaultTextColor)
+                        ringColor = getColor(R.styleable.DonutChart_ringColor, defaultRingColor)
+                        progressColor = getColor(R.styleable.DonutChart_progressColor, defaultProgressColor)
                     } finally {
                         recycle()
                     }
                 }
     }
 
+    /**
+     * @param percentage The percentage of the donut to be filled in.  Range is from 0.0 to 1.0
+     */
+    // TODO investigate skipping the sanitizing for the animation
     fun setPercentage(percentage: Float) {
-        this.percentage = percentage
-        invalidate()
-        requestLayout()
+        // cap percentage between 0 and 100 in case of bad input
+        val sanitizedPercentage = max(min(percentage, 1f), 0f)
+        // only invalidate if the value has actually changed
+        if (sanitizedPercentage != this.percentage) {
+            this.percentage = sanitizedPercentage
+            invalidate()
+        }
+    }
+
+    fun setTextSize(@DimenRes size: Int) {
+        this.textSize = resources.getDimension(size)
+    }
+
+    fun setTextColorRes(@ColorRes color: Int) {
+        this.textColor = ContextCompat.getColor(context, color)
+    }
+
+    fun setRingColorRes(@ColorRes color: Int) {
+        this.ringColor = ContextCompat.getColor(context, color)
+    }
+
+    fun setProgressColorRes(@ColorRes color: Int) {
+        this.progressColor = ContextCompat.getColor(context, color)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -72,12 +144,11 @@ class DonutChart @JvmOverloads constructor(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         // Try for a width based on our minimum
-        val minw: Int = paddingLeft + paddingRight + suggestedMinimumWidth
+        val minw: Int = paddingLeft + paddingRight + max(suggestedMinimumWidth, minimumSize)
         val w: Int = resolveSizeAndState(minw, widthMeasureSpec, 1)
 
         // Whatever the width ends up being, ask for a height that would let the donut
         // get as big as it can
-        val minh: Int = MeasureSpec.getSize(w) + paddingBottom + paddingTop
         val h: Int = resolveSizeAndState(MeasureSpec.getSize(w), heightMeasureSpec, 0)
 
         setMeasuredDimension(w, h)
@@ -86,7 +157,12 @@ class DonutChart @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawArc(oval, 120f, 300f, false, backgroundArcPaint)
-        val endpoint = min(300 * percentage, 300f)
-        canvas.drawArc(oval, 120f, endpoint, false, foregroundArcPaint)
+        canvas.drawArc(oval, 120f, 300 * percentage, false, foregroundArcPaint)
+
+        if (!TextUtils.isEmpty(text)) {
+            val textHeight = textPaint.descent() + textPaint.ascent()
+            val textBaseline = (height - textHeight) / 2f
+            canvas.drawText(text!!, (width - textPaint.measureText(text)) / 2f, textBaseline, textPaint)
+        }
     }
 }
