@@ -1,5 +1,6 @@
 package com.gstormdev.donutchart
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -8,13 +9,12 @@ import android.graphics.RectF
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.annotation.ColorRes
 import androidx.annotation.DimenRes
 import androidx.core.content.ContextCompat
 import kotlin.math.max
 import kotlin.math.min
-
-// TODO add animation for ring updates
 
 class DonutChart @JvmOverloads constructor(
     context: Context,
@@ -25,6 +25,7 @@ class DonutChart @JvmOverloads constructor(
     private val minimumSize = 100
     private var oval = RectF()
     private var percentage: Float
+    private var anglePercent: Float = 0f
 
     var text: String? = null
         set(value) {
@@ -99,15 +100,28 @@ class DonutChart @JvmOverloads constructor(
     /**
      * @param percentage The percentage of the donut to be filled in.  Range is from 0.0 to 1.0
      */
-    // TODO investigate skipping the sanitizing for the animation
     fun setPercentage(percentage: Float) {
         // cap percentage between 0 and 100 in case of bad input
         val sanitizedPercentage = max(min(percentage, 1f), 0f)
         // only invalidate if the value has actually changed
         if (sanitizedPercentage != this.percentage) {
+            val oldPercentage = this.percentage
             this.percentage = sanitizedPercentage
+            animatePercentage(oldPercentage, this.percentage)
             invalidate()
         }
+    }
+
+    private fun animatePercentage(from: Float, to: Float) {
+        val animator = ValueAnimator.ofFloat(from, to).apply {
+            interpolator = AccelerateDecelerateInterpolator()
+            duration = 250
+            addUpdateListener {
+                anglePercent = it.animatedValue as Float
+                invalidate()
+            }
+        }
+        animator.start()
     }
 
     fun setTextSize(@DimenRes size: Int) {
@@ -157,7 +171,7 @@ class DonutChart @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawArc(oval, 120f, 300f, false, backgroundArcPaint)
-        canvas.drawArc(oval, 120f, 300 * percentage, false, foregroundArcPaint)
+        canvas.drawArc(oval, 120f, 300 * anglePercent, false, foregroundArcPaint)
 
         if (!TextUtils.isEmpty(text)) {
             val textHeight = textPaint.descent() + textPaint.ascent()
